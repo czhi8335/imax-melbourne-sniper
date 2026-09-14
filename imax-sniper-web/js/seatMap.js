@@ -14,13 +14,37 @@ class SeatMapRenderer {
 
   render(showtime, availableSeatIds = []) {
     this.currentShowtime = showtime;
-    this.seats = window.IMAX_DATA.generateSeatMapForShowtime(showtime.id, availableSeatIds);
+    this.seats = window.IMAX_DATA.generateSeatMapForShowtime(
+      showtime.id,
+      availableSeatIds,
+      showtime.availableSeatsCount !== undefined ? showtime.availableSeatsCount : null
+    );
     this.selectedSeatIds.clear();
 
     if (!this.container) return;
 
+    const remainingCount = showtime.availableSeatsCount !== undefined ? showtime.availableSeatsCount : 0;
+    const isSoldOut = remainingCount === 0;
+
     this.container.innerHTML = `
       <div class="seat-map-wrapper">
+        <!-- Active Session Header Banner -->
+        <div class="session-info-banner flex flex-wrap items-center justify-between px-4 py-2.5 mb-3 rounded-xl bg-slate-900/95 border border-cyan-500/30 text-xs shadow-md">
+          <div class="flex items-center flex-wrap gap-2.5">
+            <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40">当前选中场次</span>
+            <span class="font-extrabold text-white text-sm tracking-wide">${showtime.filmTitle || 'IMAX 70MM'}</span>
+            <span class="text-cyan-400 font-mono font-semibold">${showtime.date} (${showtime.dayOfWeek}) ${showtime.time}</span>
+            <span class="text-slate-400 text-[11px]">${showtime.slotTag || ''}</span>
+          </div>
+          <div class="flex items-center flex-wrap gap-3 mt-1 sm:mt-0">
+            <span class="${!isSoldOut ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'} flex items-center gap-1.5">
+              ${!isSoldOut ? `🟢 可选普通座: <strong class="font-mono text-emerald-300">${remainingCount}</strong> 个` : '🔴 当前全部售罄 (待退票监控)'}
+            </span>
+            <span class="text-slate-600">|</span>
+            <span class="text-blue-400 font-medium">♿ 轮椅/陪同: 8 席 (已自动排除)</span>
+          </div>
+        </div>
+
         <!-- Giant Screen Banner -->
         <div class="screen-container">
           <div class="screen-curve"></div>
@@ -102,7 +126,12 @@ class SeatMapRenderer {
 
       rowSeats.forEach(seat => {
         const seatBtn = document.createElement('button');
-        seatBtn.className = `seat-btn seat-${seat.status.toLowerCase()}`;
+        const statusClass = seat.status.toLowerCase();
+        seatBtn.className = `seat-btn seat-${statusClass}`;
+        if (seat.status === 'Unavailable') {
+          seatBtn.classList.add('seat-soldout');
+          seatBtn.title = `${seat.row}排${seat.number}座 - 已售罄`;
+        }
         seatBtn.dataset.seatId = seat.id;
         seatBtn.dataset.row = seat.row;
         seatBtn.dataset.number = seat.number;
@@ -111,15 +140,20 @@ class SeatMapRenderer {
         if (seat.type === 'Wheelchair') {
           seatBtn.classList.add('seat-wheelchair');
           seatBtn.innerHTML = '♿';
+          seatBtn.title = `${seat.row}排${seat.number}座 - 轮椅位 (自动排除)`;
         } else if (seat.type === 'Companion') {
           seatBtn.classList.add('seat-companion');
           seatBtn.innerHTML = '👥';
+          seatBtn.title = `${seat.row}排${seat.number}座 - 陪同位 (自动排除)`;
         } else if (seat.status === 'Available') {
           if (topPrimeSeatIds.has(seat.id)) {
             seatBtn.classList.add('seat-top-prime');
             seatBtn.innerHTML = '★';
+            seatBtn.title = `${seat.row}排${seat.number}座 - 🌟 优选后排黄金中间座 (可选)`;
           } else {
+            seatBtn.classList.add('seat-available');
             seatBtn.innerHTML = seat.number;
+            seatBtn.title = `${seat.row}排${seat.number}座 - 可选普通座`;
           }
         } else {
           seatBtn.innerHTML = '';

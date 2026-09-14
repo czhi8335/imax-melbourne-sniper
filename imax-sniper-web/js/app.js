@@ -404,6 +404,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       card.addEventListener('click', () => {
         state.selectedFilmId = film.id;
+        state.selectedShowtimeId = null;
+        state.activeDate = null;
         renderFilmCards();
         loadFilmShowtimes(film.id);
       });
@@ -455,6 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       tab.addEventListener('click', () => {
         state.activeDate = dStr;
+        state.selectedShowtimeId = null; // Auto-select first session of new date
         renderDateTabs(dates, allShowtimes);
         renderSessionCards(allShowtimes);
       });
@@ -512,9 +515,8 @@ document.addEventListener('DOMContentLoaded', () => {
       card.addEventListener('click', () => {
         state.selectedShowtimeId = session.id;
         renderSessionCards(allShowtimes);
-        // Load interactive seat map for this session
-        const injectSeats = (session.availableSeatsCount > 0) ? ['M18', 'M19', 'N17', 'N18', 'L19', 'L20'] : [];
-        seatMap.render(session, injectSeats);
+        // Load interactive seat map for this specific session dynamically
+        seatMap.render(session);
       });
 
       sessionCardsContainer.appendChild(card);
@@ -523,8 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-select first session if none selected
     if (!state.selectedShowtimeId && daySessions.length > 0) {
       state.selectedShowtimeId = daySessions[0].id;
-      const injectSeats = (daySessions[0].availableSeatsCount > 0) ? ['M18', 'M19', 'N17', 'N18', 'L19', 'L20'] : [];
-      seatMap.render(daySessions[0], injectSeats);
+      seatMap.render(daySessions[0]);
     }
   }
 

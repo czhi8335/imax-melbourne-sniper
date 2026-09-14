@@ -116,10 +116,8 @@ class TicketSniperEngine {
     for (const showtime of targetShowtimes) {
       // In real-world detection: check if session has available tickets
       if (showtime.availableSeatsCount >= this.ticketCount) {
-        // Generate seat map and evaluate
-        // If it's the high-demand test session (e.g. 2026-10-02 21:00), populate prime rear-center seats M18, M19
-        const injectSeats = ['M18', 'M19', 'N17', 'N18', 'L19', 'L20'];
-        const seats = window.IMAX_DATA.generateSeatMapForShowtime(showtime.id, injectSeats);
+        // Generate seat map and evaluate for this specific showtime
+        const seats = window.IMAX_DATA.generateSeatMapForShowtime(showtime.id, [], showtime.availableSeatsCount);
 
         const bestSeats = window.TicketScorer.findBestSeatCombination(seats, this.ticketCount);
         if (bestSeats && bestSeats.length >= this.ticketCount) {

@@ -128,8 +128,68 @@ const ROW_CONFIG = [
   { row: 'U', seats: 28, isBack: true }
 ];
 
-function generateSeatMapForShowtime(showtimeId, injectAvailableSeats = []) {
+// Simple string hash for deterministic random numbers per showtime
+function hashString(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function generateSeatMapForShowtime(showtimeId, injectAvailableSeats = [], availableCount = null) {
   const seats = [];
+  const hash = hashString(showtimeId || 'default');
+
+  // Determine which specific seats are available in this showtime based on hash
+  const dynamicAvailableSeats = new Set(injectAvailableSeats || []);
+
+  // Parse session date & time from ID
+  const isFriOrSat = showtimeId.includes('20261002') || showtimeId.includes('20261003') || showtimeId.includes('20261009') || showtimeId.includes('20261010');
+  const isNight = showtimeId.includes('18') || showtimeId.includes('19') || showtimeId.includes('20') || showtimeId.includes('21');
+
+  if ((!injectAvailableSeats || injectAvailableSeats.length === 0)) {
+    if (availableCount === 0) {
+      // Strictly sold out session - 0 normal seats available
+    } else {
+      const targetCount = availableCount !== null ? availableCount : (isNight ? 3 : 8);
+
+      if (targetCount > 0) {
+        // Prime pools
+        const primePools = [
+          ['M18', 'M19', 'M17'],
+          ['N17', 'N18', 'N19'],
+          ['L18', 'L19', 'L20'],
+          ['K17', 'K18', 'K19'],
+          ['P17', 'P18', 'P19'],
+          ['H17', 'H18', 'H19'],
+          ['J18', 'J19', 'J20']
+        ];
+
+        // Pick initial prime cluster based on hash
+        const cluster = primePools[hash % primePools.length];
+        for (let i = 0; i < Math.min(targetCount, cluster.length); i++) {
+          dynamicAvailableSeats.add(cluster[i]);
+        }
+
+        // If more seats needed (e.g. daytime or weekday afternoon)
+        let added = dynamicAvailableSeats.size;
+        const candidateRows = ['D', 'E', 'F', 'H', 'J', 'Q', 'R', 'S', 'T'];
+        let step = 1;
+        while (added < targetCount && step < 50) {
+          const row = candidateRows[(hash + step) % candidateRows.length];
+          const num = 10 + ((hash * step + step * 3) % 18);
+          const seatId = `${row}${num}`;
+          if (!dynamicAvailableSeats.has(seatId)) {
+            dynamicAvailableSeats.add(seatId);
+            added++;
+          }
+          step++;
+        }
+      }
+    }
+  }
 
   ROW_CONFIG.forEach(cfg => {
     const row = cfg.row;
@@ -139,7 +199,7 @@ function generateSeatMapForShowtime(showtimeId, injectAvailableSeats = []) {
     for (let num = 1; num <= count; num++) {
       const seatId = `${row}${num}`;
       let type = 'Normal';
-      let status = 'Unavailable'; // Default sold out in popular 70mm sessions
+      let status = 'Unavailable'; // Default sold out
 
       // Wheelchair & Companion placements
       if (cfg.hasWheelchair) {
@@ -152,8 +212,8 @@ function generateSeatMapForShowtime(showtimeId, injectAvailableSeats = []) {
         }
       }
 
-      // Check if this seat is explicitly made available
-      if (injectAvailableSeats.includes(seatId)) {
+      // Check if this seat is dynamically available in this showtime
+      if (dynamicAvailableSeats.has(seatId)) {
         status = 'Available';
         type = 'Normal';
       }

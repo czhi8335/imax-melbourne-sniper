@@ -23,10 +23,10 @@ class NotificationService {
       } catch (e) {}
     }
     return {
-      channel: 'bark', // 'bark' | 'pushplus' | 'serverchan' | 'telegram' | 'discord' | 'custom'
-      barkKey: '', // e.g., "https://api.day.app/your_key/" or "your_key"
+      channel: 'pushplus', // default to WeChat Pushplus
       pushplusToken: '',
       serverchanKey: '',
+      barkKey: '',
       telegramBotToken: '',
       telegramChatId: '',
       discordWebhookUrl: '',
@@ -84,28 +84,34 @@ class NotificationService {
     // 1. Browser desktop notification
     this.showDesktopNotification(title, fullBody, url);
 
-    // 2. Mobile channel dispatch
-    switch (this.config.channel) {
-      case 'bark':
-        results.push(await this.sendBark(title, fullBody, url));
-        break;
-      case 'pushplus':
-        results.push(await this.sendPushplus(title, fullBody, url));
-        break;
-      case 'serverchan':
-        results.push(await this.sendServerChan(title, fullBody, url));
-        break;
-      case 'telegram':
-        results.push(await this.sendTelegram(title, fullBody, url));
-        break;
-      case 'discord':
-        results.push(await this.sendDiscord(title, fullBody, url));
-        break;
-      case 'custom':
-        results.push(await this.sendCustomWebhook(title, fullBody, url));
-        break;
-      default:
-        results.push({ success: false, message: '未配置手机提醒通道' });
+    // 2. Determine active channels based on configured keys
+    const hasPushplus = !!(this.config.pushplusToken && this.config.pushplusToken.trim());
+    const hasServerchan = !!(this.config.serverchanKey && this.config.serverchanKey.trim());
+    const hasBark = !!(this.config.barkKey && this.config.barkKey.trim());
+    const hasTg = !!(this.config.telegramBotToken && this.config.telegramChatId);
+    const hasDiscord = !!(this.config.discordWebhookUrl);
+
+    if (hasPushplus) {
+      results.push(await this.sendPushplus(title, fullBody, url));
+    }
+    if (hasServerchan) {
+      results.push(await this.sendServerChan(title, fullBody, url));
+    }
+    if (hasBark) {
+      results.push(await this.sendBark(title, fullBody, url));
+    }
+    if (hasTg) {
+      results.push(await this.sendTelegram(title, fullBody, url));
+    }
+    if (hasDiscord) {
+      results.push(await this.sendDiscord(title, fullBody, url));
+    }
+
+    if (!hasPushplus && !hasServerchan && !hasBark && !hasTg && !hasDiscord) {
+      results.push({
+        success: false,
+        message: '尚未配置手机提醒通道。请点击页面右上角【📲 微信提醒配置】填入 Pushplus Token 绑定微信！'
+      });
     }
 
     return results;
