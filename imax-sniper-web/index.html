@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>墨尔本 IMAX 电影票实时监控与智能抢票系统</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/style.css" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            imaxCyan: '#00f0ff',
+            imaxPurple: '#8b5cf6',
+            imaxGold: '#f59e0b',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="text-slate-100">
+
+  <!-- ================= TOP NAVIGATION ================= -->
+  <header class="app-header py-3 px-4 lg:px-8">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <!-- Logo & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center font-black text-xl tracking-tighter shadow-lg shadow-cyan-500/20">
+          70M
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+              墨尔本 IMAX 智能抢票系统
+              <span class="text-xs font-mono uppercase bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded">Melbourne IMAX</span>
+            </h1>
+          </div>
+          <p class="text-xs text-slate-400">实时余票检测 · 后排中间优选 · 自动填表锁票 · 微信服务号即时提醒</p>
+        </div>
+      </div>
+
+      <!-- Top Action Status & Controls -->
+      <div class="flex items-center space-x-3">
+        <!-- Live Status Pill -->
+        <div id="engineStatusPill" class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-xs">
+          <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+          <span id="statusText" class="font-medium text-slate-300">系统就绪 (待命)</span>
+        </div>
+
+        <!-- WeChat Setup Button -->
+        <button id="btnOpenWechatModal" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-500/30 text-xs transition font-medium">
+          <span>📲</span>
+          <span>微信提醒配置</span>
+          <span id="wechatConfiguredBadge" class="hidden w-2 h-2 rounded-full bg-emerald-400"></span>
+        </button>
+
+        <!-- Sound Alarm Toggle -->
+        <button id="btnToggleSound" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs transition" title="测试/静音警报">
+          <span id="soundIcon">🔊</span>
+          <span id="soundText">警报音已开启</span>
+        </button>
+
+        <!-- Browser Notification -->
+        <button id="btnBrowserNotify" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs transition">
+          <span>🔔</span>
+          <span id="browserNotifyText">授权桌面通知</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTAINER ================= -->
+  <main class="max-w-7xl mx-auto px-4 lg:px-8 py-6 space-y-8">
+
+    <!-- STEP 1: MOVIE SELECTION & REAL-TIME REMAINING TICKETS -->
+    <section class="glass-panel p-5 lg:p-6">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-5 border-b border-slate-800 pb-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 font-bold text-xs flex items-center justify-center border border-cyan-500/40">1</span>
+            <h2 class="text-base font-bold text-white tracking-wide">电影种类与场次余票展示</h2>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5 ml-8">实时获取墨尔本 IMAX 影院所有片目与场次，支持按胶片/激光制式过滤</p>
+        </div>
+
+        <!-- One-Click Show All Movies Button -->
+        <div class="flex items-center space-x-3">
+          <button id="btnFetchAllShowtimes" class="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-900 font-bold text-xs tracking-wider shadow-lg shadow-cyan-500/20 flex items-center space-x-2 transition">
+            <span class="text-sm">⚡</span>
+            <span>一键显示所有电影余票</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Format Filter Pills -->
+      <div class="flex flex-wrap gap-2 mb-4" id="filmFormatTabs">
+        <button class="px-3 py-1 rounded-full text-xs font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 transition format-pill active" data-format="ALL">全部格式</button>
+        <button class="px-3 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition format-pill" data-format="IMAX 70MM">🎞️ IMAX 1570 70MM 胶片</button>
+        <button class="px-3 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition format-pill" data-format="IMAX LASER">⚡ IMAX 激光版</button>
+      </div>
+
+      <!-- Film Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" id="filmCardsContainer">
+        <!-- Film cards rendered dynamically by app.js -->
+      </div>
+
+      <!-- Showtimes Selector for Active Film -->
+      <div id="showtimesSection" class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h3 class="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
+            <span>📅</span>
+            <span id="activeFilmScheduleTitle">放映场次余票列表</span>
+          </h3>
+          <div class="flex items-center space-x-4 text-xs text-slate-400">
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span> 周五/周六全天监控
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-cyan-400"></span> 其余五天 18:00 以后监控
+            </span>
+          </div>
+        </div>
+
+        <!-- Date Tabs -->
+        <div class="flex items-center space-x-2 overflow-x-auto pb-2 mb-3" id="dateTabsContainer">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <!-- Session Cards Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" id="sessionCardsContainer">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+
+    <!-- STEP 2: INTERACTIVE AUDITORIUM SEAT MAP -->
+    <section class="glass-panel p-5 lg:p-6">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-4 border-b border-slate-800 pb-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 font-bold text-xs flex items-center justify-center border border-cyan-500/40">2</span>
+            <h2 class="text-base font-bold text-white tracking-wide">墨尔本 IMAX 影厅全景座位图与一键选座</h2>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5 ml-8">全球第二大银幕真实排位布局，智能排除轮椅位，深度加权推荐后排中央黄金座位</p>
+        </div>
+
+        <!-- Auto-Recommend Best Seats Button -->
+        <div class="flex items-center space-x-3">
+          <button id="btnAutoRecommendSeats" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-900 font-bold text-xs tracking-wider shadow-lg shadow-amber-500/20 flex items-center space-x-1.5 transition">
+            <span>✨</span>
+            <span>一键推荐最佳后排中间座</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Seat Map Mounting Point -->
+      <div id="seatMapContainer" class="w-full">
+        <!-- Rendered by seatMap.js -->
+      </div>
+    </section>
+
+
+    <!-- GRID: STEP 3 (PERSONAL & PAYMENT INFO) + STEP 4 (RULES & SNIPER ENGINE) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- STEP 3: PERSONAL & PAYMENT INFO (5 COLS) -->
+      <section class="glass-panel p-5 lg:p-6 lg:col-span-5 space-y-5">
+        <div class="border-b border-slate-800 pb-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 font-bold text-xs flex items-center justify-center border border-cyan-500/40">3</span>
+              <h2 class="text-base font-bold text-white tracking-wide">个人信息与付款预填</h2>
+            </div>
+            <button id="btnFillDemoData" class="text-xs text-cyan-400 hover:text-cyan-300 underline font-mono">一键填入演示数据</button>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5 ml-8">检出目标票时毫秒级自动填入并提交订单，确保抢票不丢单</p>
+        </div>
+
+        <!-- Ticket Type & Quantity -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">票种选择 (Ticket Type)</label>
+            <select id="selectTicketType" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+              <option value="adult">成人票 ($42.00)</option>
+              <option value="concession">学生/优惠票 ($38.00)</option>
+              <option value="member">IMAX 会员票 ($35.00)</option>
+              <option value="child">儿童票 ($32.00)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">抢票张数 (Quantity)</label>
+            <select id="selectTicketCount" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+              <option value="1">1 张</option>
+              <option value="2" selected>2 张 (优先连座)</option>
+              <option value="3">3 张</option>
+              <option value="4">4 张</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Personal Details -->
+        <div class="space-y-3 pt-1">
+          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">购票人身份信息 (Personal Details)</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">名 (First Name)</label>
+              <input type="text" id="inputFirstName" placeholder="如: Ian" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">姓 (Last Name)</label>
+              <input type="text" id="inputLastName" placeholder="如: Tong" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">电子邮箱 (接收 IMAX 官方电子客票与预订码)</label>
+            <input type="email" id="inputEmail" placeholder="your_email@example.com" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">联系手机号 (澳洲本土或国际号码)</label>
+            <input type="tel" id="inputPhone" placeholder="如: 0412 345 678" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500" />
+          </div>
+        </div>
+
+        <!-- Payment Credentials (Pre-fill) -->
+        <div class="space-y-3 pt-2 border-t border-slate-800">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">付款信息预填 (Payment Credentials)</h4>
+            <span class="text-[10px] text-emerald-400 flex items-center gap-1">🔒 浏览器本地安全存储</span>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">持卡人姓名 (Cardholder)</label>
+            <input type="text" id="inputCardholder" placeholder="IAN TONG" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">信用卡卡号 (Card Number)</label>
+            <input type="text" id="inputCardNumber" placeholder="4532 •••• •••• 8888" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-cyan-500" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">有效期 (MM/YY)</label>
+              <input type="text" id="inputCardExpiry" placeholder="08/28" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-cyan-500" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">安全码 (CVV)</label>
+              <input type="password" id="inputCardCvv" placeholder="•••" maxlength="4" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-cyan-500" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 4 & 5: SNIPE RULES & AUTONOMOUS ENGINE CONSOLE (7 COLS) -->
+      <section class="glass-panel p-5 lg:p-6 lg:col-span-7 flex flex-col justify-between space-y-5">
+        <div>
+          <div class="border-b border-slate-800 pb-3 mb-4">
+            <div class="flex items-center space-x-2">
+              <span class="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 font-bold text-xs flex items-center justify-center border border-cyan-500/40">4</span>
+              <h2 class="text-base font-bold text-white tracking-wide">抢票需求设定 & 自动锁票控制台</h2>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5 ml-8">全天候高频轮询，检出符合条件余票即自动填表锁票，并通过微信推送提醒</p>
+          </div>
+
+          <!-- Rules Summary Toggles -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-4">
+            <div class="flex items-center space-x-2.5 p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs">
+              <input type="checkbox" id="ruleFriSatAllDay" checked disabled class="w-4 h-4 rounded text-cyan-500 focus:ring-0 bg-slate-800 border-slate-700" />
+              <label for="ruleFriSatAllDay" class="text-slate-200 font-medium">周五、周六全天任意场次</label>
+            </div>
+            <div class="flex items-center space-x-2.5 p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs">
+              <input type="checkbox" id="ruleWeekdayAfter18" checked disabled class="w-4 h-4 rounded text-cyan-500 focus:ring-0 bg-slate-800 border-slate-700" />
+              <label for="ruleWeekdayAfter18" class="text-slate-200 font-medium">其余五天 18:00 以后场次</label>
+            </div>
+            <div class="flex items-center space-x-2.5 p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs">
+              <input type="checkbox" id="ruleExcludeDisabled" checked disabled class="w-4 h-4 rounded text-cyan-500 focus:ring-0 bg-slate-800 border-slate-700" />
+              <label for="ruleExcludeDisabled" class="text-slate-200 font-medium">严格排除轮椅位及陪同座</label>
+            </div>
+            <div class="flex items-center space-x-2.5 p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs">
+              <input type="checkbox" id="ruleRearMiddlePrime" checked disabled class="w-4 h-4 rounded text-cyan-500 focus:ring-0 bg-slate-800 border-slate-700" />
+              <label for="ruleRearMiddlePrime" class="text-slate-200 font-medium">后排优先 (H-P排) & 中间优先</label>
+            </div>
+          </div>
+
+          <!-- Engine Configuration Row -->
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4 p-3 rounded-lg bg-slate-900/60 border border-slate-800">
+            <div class="flex items-center space-x-2">
+              <span class="text-xs text-slate-400">检测轮询频率:</span>
+              <select id="selectPollingInterval" class="bg-slate-800 border border-slate-700 rounded px-2.5 py-1 text-xs text-white focus:outline-none">
+                <option value="3">3 秒 (极速高频)</option>
+                <option value="5" selected>5 秒 (推荐平衡)</option>
+                <option value="10">10 秒</option>
+                <option value="30">30 秒</option>
+              </select>
+            </div>
+
+            <!-- Countdown Badge -->
+            <div id="countdownBadge" class="text-xs font-mono px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-cyan-300">
+              就绪状态
+            </div>
+          </div>
+
+          <!-- Engine Control Action Buttons -->
+          <div class="flex flex-wrap gap-3 mb-4">
+            <button id="btnStartSniper" class="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-sm tracking-wider shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 transition">
+              <span>🚀</span>
+              <span>启动自动抢票监控</span>
+            </button>
+
+            <button id="btnStopSniper" class="py-2.5 px-5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm border border-slate-700 flex items-center justify-center space-x-1.5 transition hidden">
+              <span>🛑</span>
+              <span>停止监控</span>
+            </button>
+
+            <button id="btnSimulateDrop" class="py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs border border-purple-500/30 flex items-center justify-center space-x-1.5 transition shadow-lg shadow-purple-500/20" title="一键模拟检出退票、自动锁票、发送微信通知与报警全流程">
+              <span>🧪</span>
+              <span>模拟检出退票并自动锁票</span>
+            </button>
+          </div>
+
+          <!-- Live Terminal Logs -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+              <span class="font-mono flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-cyan-400"></span> 实时监控运行控制台
+              </span>
+              <button id="btnClearLogs" class="text-[11px] text-slate-500 hover:text-slate-300">清空日志</button>
+            </div>
+            <div class="terminal-box" id="terminalLogsContainer">
+              <div class="terminal-line">
+                <span class="terminal-time">[系统]</span>
+                <span class="terminal-text-info">墨尔本 IMAX 智能抢票系统已加载完毕，等待启动指令...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </main>
+
+
+  <!-- ================= WECHAT NOTIFICATION MODAL ================= -->
+  <div id="wechatModal" class="modal-overlay hidden">
+    <div class="modal-content p-6">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span>📲</span> 微信服务号即时提醒设置
+        </h3>
+        <button id="btnCloseWechatModal" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-300 mb-4 leading-relaxed">
+        系统将在<strong>自动锁票完成的第一时间</strong>向您的手机微信推送服务号卡片消息，点击即可在手机端直接进入官方结算页面。
+      </p>
+
+      <!-- Pushplus Configuration -->
+      <div class="space-y-4">
+        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-700/80">
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-bold text-emerald-400">方式一：Pushplus 微信推送加 (最推荐 · 免费免配置)</label>
+            <a href="https://www.pushplus.plus" target="_blank" class="text-[11px] text-cyan-400 hover:underline">访问官网获取 Token &rarr;</a>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-2">微信扫码关注【pushplus推送加】公众号，复制您的个人 Token 粘贴在此处：</p>
+          <input type="text" id="inputPushplusToken" placeholder="粘贴您的 Pushplus Token (如: 1a2b3c4d5e...)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500" />
+        </div>
+
+        <!-- ServerChan Configuration -->
+        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-700/80">
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-bold text-slate-300">方式二：Server酱 (方糖微信推送)</label>
+            <a href="https://sct.ftqq.com" target="_blank" class="text-[11px] text-cyan-400 hover:underline">访问官网获取 SendKey &rarr;</a>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-2">在 Server酱 绑定微信，复制 SendKey 粘贴在此处：</p>
+          <input type="text" id="inputServerchanKey" placeholder="粘贴您的 ServerChan SendKey (如: SCTxxxx...)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-cyan-500" />
+        </div>
+
+        <!-- iPhone Bark Alternative -->
+        <div class="p-3 rounded-lg bg-slate-900/60 border border-slate-800">
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-medium text-slate-400">备选：iPhone Bark 设备 Key (iOS 用户专属)</label>
+            <span class="text-[10px] text-slate-500">App Store 搜 Bark</span>
+          </div>
+          <input type="text" id="inputBarkKey" placeholder="输入 Bark Key (如: your_bark_key)" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none" />
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center space-x-3 pt-2">
+          <button id="btnTestWechatPush" class="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition">
+            <span>📲</span>
+            <span>发送微信测试消息</span>
+          </button>
+          <button id="btnSaveWechatConfig" class="px-5 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold transition">
+            保存配置
+          </button>
+        </div>
+
+        <!-- Test Feedback Area -->
+        <div id="wechatTestFeedback" class="hidden text-xs p-2.5 rounded-lg"></div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ================= TICKET LOCKED SUCCESS & CHECKOUT MODAL ================= -->
+  <div id="lockedTicketModal" class="modal-overlay hidden">
+    <div class="modal-content p-6 border-cyan-400 shadow-2xl shadow-cyan-500/30">
+      <div class="text-center mb-4">
+        <div class="w-14 h-14 mx-auto rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-3xl mb-2 border border-emerald-500/40">
+          🎉
+        </div>
+        <h3 class="text-xl font-extrabold text-white tracking-wide">抢票成功！座位已锁定</h3>
+        <p class="text-xs text-emerald-400 font-medium mt-1">系统已毫秒级填入个人信息，并向您的手机微信推送了提醒！</p>
+      </div>
+
+      <!-- 10:00 Hold Countdown Timer -->
+      <div class="p-3 bg-slate-950 rounded-xl border border-cyan-500/30 flex items-center justify-between mb-4">
+        <div class="flex items-center space-x-2">
+          <span class="text-xl">⏳</span>
+          <div>
+            <div class="text-[10px] uppercase tracking-wider text-slate-400">官方锁票保护倒计时 (Hold Timer)</div>
+            <div class="text-xs text-slate-300 font-medium">请在倒计时结束前完成付款出票</div>
+          </div>
+        </div>
+        <div id="modalCountdownDisplay" class="text-2xl font-black font-mono text-cyan-300 tracking-wider">
+          10:00
+        </div>
+      </div>
+
+      <!-- Order Details Summary -->
+      <div class="space-y-2.5 bg-slate-900/90 p-4 rounded-xl border border-slate-800 text-xs mb-5">
+        <div class="flex justify-between pb-2 border-b border-slate-800">
+          <span class="text-slate-400">订单编号:</span>
+          <span id="modalOrderId" class="font-mono text-slate-200 font-bold">IMX-778219</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">电影名称:</span>
+          <span id="modalFilmTitle" class="text-white font-bold">THE ODYSSEY: IMAX 70MM</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">放映场次:</span>
+          <span id="modalShowtimeInfo" class="text-cyan-300 font-medium">2026-10-02 (周五) 19:30</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">锁定座位:</span>
+          <span id="modalSeatsInfo" class="text-amber-400 font-bold text-sm">Row M 18, Row M 19 (后排中间优选)</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">购票人姓名 / 手机:</span>
+          <span id="modalCustomerInfo" class="text-slate-200">Ian Tong / 0412 345 678</span>
+        </div>
+        <div class="flex justify-between pt-2 border-t border-slate-800 text-sm font-bold">
+          <span class="text-slate-300">总计金额:</span>
+          <span id="modalTotalAmount" class="text-emerald-400 font-mono text-base">$84.00 AUD</span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="space-y-2.5">
+        <button id="btnProceedPayment" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm tracking-wider shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 transition">
+          <span>💳</span>
+          <span>立即完成支付并出票</span>
+        </button>
+
+        <a id="btnOpenOfficialCheckout" href="https://web.imaxmelbourne.com.au/films/THE-ODYSSEY-IMAX-70MM-PRESENTATION/HO00000547#showtimes" target="_blank" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs border border-cyan-500/30 flex items-center justify-center space-x-1.5 transition">
+          <span>🔗</span>
+          <span>跳转墨尔本 IMAX 官方直通车页面</span>
+        </a>
+
+        <button id="btnCloseLockedModal" class="w-full py-2 text-xs text-slate-500 hover:text-slate-300">
+          关闭窗口（停止警报）
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ================= SCRIPTS ================= -->
+  <script src="js/sound.js"></script>
+  <script src="js/notify.js"></script>
+  <script src="js/mockData.js"></script>
+  <script src="js/scorer.js"></script>
+  <script src="js/seatMap.js"></script>
+  <script src="js/sniper.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
